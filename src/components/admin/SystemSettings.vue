@@ -1,241 +1,8 @@
 <template>
   <div class="system-settings">
     <div class="settings-header">
-      <h2>⚙️ 系统设置</h2>
-      <p>管理导航站的系统配置和GitHub集成</p>
-    </div>
-
-    <!-- GitHub连接状态 -->
-    <div class="settings-section">
-      <h3>🔗 GitHub 集成状态</h3>
-      <div class="github-status" :class="{ connected: connectionStatus?.connected }">
-        <div class="status-info">
-          <div class="status-indicator">
-            <span class="status-dot" :class="{ active: connectionStatus?.connected }"></span>
-            <span class="status-text">
-              {{ connectionStatus?.connected ? 'GitHub 连接正常' : 'GitHub 连接失败' }}
-            </span>
-          </div>
-          <div v-if="connectionStatus?.connected" class="repo-info">
-            <p><strong>仓库:</strong> {{ connectionStatus.repo }}</p>
-            <p><strong>权限:</strong>
-              <span v-if="connectionStatus.permissions?.push" class="permission-badge success">写入权限</span>
-              <span v-else class="permission-badge warning">只读权限</span>
-            </p>
-          </div>
-          <div v-else-if="connectionStatus?.error" class="error-info">
-            <p>错误信息: {{ connectionStatus.error }}</p>
-          </div>
-        </div>
-        <div class="status-actions">
-          <button @click="testConnection" :disabled="testing" class="test-btn">
-            {{ testing ? '测试中...' : '🔄 重新测试' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- 网站设置 -->
-    <div class="settings-section">
-      <h3>🌐 网站设置</h3>
-      <div class="website-settings">
-        <!-- 网站标题设置 -->
-        <div class="setting-group">
-          <label>网站标题:</label>
-          <div class="title-input-group">
-            <input
-              v-model="websiteTitle"
-              type="text"
-              placeholder="请输入网站标题"
-              class="title-input"
-              maxlength="50"
-            >
-            <button
-              @click="saveTitleToGitHub"
-              :disabled="titleSaving || !websiteTitle.trim()"
-              class="save-title-btn"
-            >
-              {{ titleSaving ? '保存中...' : '💾 保存标题' }}
-            </button>
-          </div>
-          <p class="setting-description">当前标题: {{ currentTitle || '未设置' }}</p>
-        </div>
-
-        <!-- 默认搜索引擎设置 -->
-        <div class="setting-group">
-          <label>默认搜索引擎:</label>
-          <div class="search-engine-input-group">
-            <select v-model="searchEngine" class="search-engine-select">
-              <option
-                v-for="option in searchEngineOptions"
-                :key="option.value"
-                :value="option.value"
-              >
-                {{ option.label }}
-              </option>
-            </select>
-            <button
-              @click="saveSearchEngineToGitHub"
-              :disabled="searchEngineSaving || searchEngine === currentSearchEngine"
-              class="save-search-engine-btn"
-            >
-              {{ searchEngineSaving ? '保存中...' : '💾 保存设置' }}
-            </button>
-          </div>
-          <p class="setting-description">当前搜索引擎: {{ searchEngineOptions.find(opt => opt.value === currentSearchEngine)?.label || '未设置' }}</p>
-        </div>
-
-        <!-- Logo设置 -->
-        <div class="setting-group">
-          <label>网站Logo:</label>
-          <div class="logo-upload-area">
-            <div class="logo-preview">
-              <img
-                v-if="logoPreview"
-                :src="logoPreview"
-                alt="Logo预览"
-                class="logo-preview-img"
-              >
-              <img
-                v-else-if="currentLogo"
-                :src="currentLogo"
-                alt="当前Logo"
-                class="logo-preview-img"
-              >
-              <div v-else class="logo-placeholder">
-                <span>🖼️</span>
-                <p>暂无Logo</p>
-              </div>
-            </div>
-            <div class="logo-upload-controls">
-              <input
-                ref="logoFileInput"
-                type="file"
-                accept="image/png"
-                @change="handleLogoSelect"
-                style="display: none"
-              >
-              <button @click="selectLogo" class="select-logo-btn">
-                📁 选择PNG文件
-              </button>
-              <button
-                @click="saveLogoToGitHub"
-                :disabled="logoSaving || !selectedLogoFile"
-                class="save-logo-btn"
-                v-if="selectedLogoFile"
-              >
-                {{ logoSaving ? '上传中...' : '🚀 上传Logo' }}
-              </button>
-            </div>
-          </div>
-          <p class="setting-description">仅支持PNG格式，建议尺寸: 128x128px</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 环境变量配置 -->
-    <div class="settings-section">
-      <h3>🌍 环境变量配置</h3>
-      <div class="env-config">
-        <div class="config-item">
-          <label>管理员密钥 (VITE_ADMIN_PASSWORD):</label>
-          <div class="config-value">
-            <span v-if="envConfig.adminPassword" class="value-set">✅ 已配置</span>
-            <span v-else class="value-missing">❌ 未配置</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub Token (VITE_GITHUB_TOKEN):</label>
-          <div class="config-value">
-            <span v-if="envConfig.githubToken" class="value-set">✅ 已配置</span>
-            <span v-else class="value-missing">❌ 未配置</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 仓库所有者 (VITE_GITHUB_OWNER):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubOwner || '默认: maodeyu180' }}</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 仓库名称 (VITE_GITHUB_REPO):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubRepo || '默认: mao_nav' }}</span>
-          </div>
-        </div>
-        <div class="config-item">
-          <label>GitHub 分支 (VITE_GITHUB_BRANCH):</label>
-          <div class="config-value">
-            <span class="value-display">{{ envConfig.githubBranch || '默认: master' }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 配置说明 -->
-    <div class="settings-section">
-      <h3>📖 配置说明</h3>
-      <div class="config-guide">
-        <div class="guide-step">
-          <h4>1. 获取 GitHub Personal Access Token</h4>
-          <ol>
-            <li>访问 <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer">GitHub Settings → Developer settings → Personal access tokens</a></li>
-            <li>点击 "Generate new token" → "Generate new token (fine-grained token)"</li>
-            <li>设置 Token 名称，选择过期时间,仓库只选择mao_nav 防止token 泄露影响自己其他工程</li>
-            <li>
-              <strong>在 <span style="color:#3498db">Repository permissions (仓库权限)</span> 部分，勾选以下权限：</strong>
-              <ul>
-                <li>
-                  <code>Contents</code> - <strong>Read and write</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于读取和修改 <code>src/mock/mock_data.js</code> 文件，这是管理系统的核心功能</span>
-                </li>
-                <li>
-                  <code>Metadata</code> - <strong>Read</strong> ✅<br>
-                  <span style="color:#888;font-size:13px;">用于访问仓库基本信息，GitHub API 的基础权限</span>
-                </li>
-              </ul>
-              <div style="margin-top:8px;">
-                <strong>在 <span style="color:#f39c12">Account permissions (账户权限)</span> 部分：</strong><br>
-                <span style="color:#888;font-size:13px;">不需要勾选任何账户权限 ❌，我们只操作特定仓库，不需要账户级别的权限</span>
-              </div>
-            </li>
-            <li>点击 "Generate token" 并复制 Token</li>
-          </ol>
-        </div>
-
-        <div class="guide-step">
-          <h4>2. 配置环境变量</h4>
-          <p>
-            <strong>如果你在 <span style="color:#3498db">自己的服务器</span> 部署：</strong><br>
-            在项目根目录创建 <code>.env</code> 文件，添加以下配置：
-          </p>
-          <p>
-            <strong>如果你使用 <span style="color:#27ae60">Vercel</span> 或 <span style="color:#f39c12">Cloudflare Pages</span> 部署：</strong><br>
-            请在对应平台的「环境变量」设置界面，添加下方这些变量，无需在项目中创建 <code>.env</code> 文件。
-          </p>
-          <div class="code-block">
-            <pre><code># 管理员密钥（自定义）
-VITE_ADMIN_PASSWORD=your_admin_password_here
-
-# GitHub Token
-VITE_GITHUB_TOKEN=your_github_token_here
-# Github 仓库所有者
-VITE_GITHUB_OWNER=your_github_owner_here
-VITE_GITHUB_REPO=your_github_repo_here
-VITE_GITHUB_BRANCH=your_github_branch_here</code></pre>
-          </div>
-        </div>
-
-        <div class="guide-step">
-          <h4>3. 安全注意事项</h4>
-          <ul>
-            <li>🔒 <strong>不要</strong>将 <code>.env</code> 文件提交到 Git 仓库</li>
-            <li>🔑 GitHub Token 具有写入权限，请妥善保管</li>
-            <li>🚫 定期更新和轮换 Token</li>
-            <li>📝 在生产环境中，建议使用更安全的密钥管理方案</li>
-          </ul>
-        </div>
-      </div>
+      <h2>⚙️ 系统信息</h2>
+      <p>管理导航站的系统信息</p>
     </div>
 
     <!-- 系统信息 -->
@@ -388,7 +155,7 @@ const getSystemInfo = () => {
 const loadWebsiteSettings = async () => {
   try {
     const data = await loadCategoriesFromGitHub()
-    currentTitle.value = data.title || '猫猫导航'
+    currentTitle.value = data.title || 'Go-Sail导航站'
     websiteTitle.value = currentTitle.value
 
     // 加载搜索引擎设置
@@ -396,8 +163,8 @@ const loadWebsiteSettings = async () => {
     searchEngine.value = currentSearchEngine.value
   } catch (error) {
     console.error('加载网站设置失败:', error)
-    currentTitle.value = '猫猫导航'
-    websiteTitle.value = '猫猫导航'
+    currentTitle.value = 'Go-Sail导航站'
+    websiteTitle.value = 'Go-Sail导航站'
     currentSearchEngine.value = 'bing'
     searchEngine.value = 'bing'
   }
@@ -585,10 +352,10 @@ const saveLogoToGitHub = async () => {
 
 // 组件挂载时执行
 onMounted(() => {
-  checkEnvConfig()
+  // checkEnvConfig()
   getSystemInfo()
-  testConnection()
-  loadWebsiteSettings()
+  // testConnection()
+  // loadWebsiteSettings()
 })
 </script>
 

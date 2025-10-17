@@ -481,6 +481,6 @@ export const mockData = {
       ]
     }
   ],
-  "title": "猫猫导航🐱",
+  "title": "Go-Sail导航站🐱",
   "_fileSha": "782bd4a5e3de31d5171bc16c726b5b2b0b2c2002"
 }

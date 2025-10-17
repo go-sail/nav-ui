@@ -1,18 +1,18 @@
 {
-  "name": "mao_nav",
+  "name": "nav-ui",
   "version": "1.0.0",
   "description": "🐱 一个简洁美观的个人导航网站，支持分类管理和自定义收藏夹",
   "private": false,
   "type": "module",
-  "author": "Your Name <your.email@example.com>",
+  "author": "go-sail <go-sail@go-sail.dev>",
   "license": "MIT",
-  "homepage": "https://github.com/your-username/mao_nav#readme",
+  "homepage": "https://github.com/go-sail/nav-ui#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-username/mao_nav.git"
+    "url": "git+https://github.com/go-sail/nav-ui.git"
   },
   "bugs": {
-    "url": "https://github.com/your-username/mao_nav/issues"
+    "url": "https://github.com/go-sail/nav-ui/issues"
   },
   "keywords": [
     "navigation",
@@ -25,8 +25,8 @@
     "书签管理"
   ],
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --mode development",
+    "build": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint . --fix"
   },

@@ -3,18 +3,18 @@
     <div class="manager-header">
       <h2>🌐 站点管理</h2>
       <div class="header-actions">
-        <select v-model="selectedCategoryId" class="category-filter">
+        <select v-model="selectedCategoryId" class="category-filter" style="min-width: 150px;">
           <option value="">所有分类</option>
-          <option v-for="category in localCategories" :key="category.id" :value="category.id">
-            {{ category.icon }} {{ category.name }}
+          <option v-for="category in localCategories" :key="category.identity" :value="category.identity">
+            {{ category.name }}
           </option>
         </select>
         <button @click="openAddModal" class="add-btn">
           ➕ 添加站点
         </button>
-        <button @click="handleSave" :disabled="loading" class="save-btn">
+        <!-- <button @click="handleSave" :disabled="loading" class="save-btn">
           {{ loading ? '保存中...' : '💾 保存到GitHub' }}
-        </button>
+        </button> -->
       </div>
     </div>
 
@@ -43,7 +43,7 @@
         v-model="currentPageSites"
         v-bind="dragOptions"
         @end="onDragEnd"
-        item-key="id"
+        item-key="identity"
         tag="div"
         class="draggable-list"
         :class="{ 'pagination-disabled': !selectedCategoryId }"
@@ -67,7 +67,7 @@
                   {{ site.url }}
                 </a>
                 <span class="site-category">
-                  {{ getCategoryName(site.categoryId) }}
+                  {{ getCategoryName(site.categoryIdentity) }}
                 </span>
               </div>
             </div>
@@ -75,7 +75,7 @@
               <button @click="editSite(site)" class="edit-btn">
                 ✏️ 编辑
               </button>
-              <button @click="deleteSite(site)" class="delete-btn">
+              <button @click="handleDeleteSite(site)" class="delete-btn">
                 🗑️ 删除
               </button>
             </div>
@@ -102,14 +102,14 @@
         <div class="modal-header">
           <h3>
             {{ editingSite ? '编辑站点' : '添加站点' }}
-            <span v-if="!editingSite && formData.categoryId" class="category-hint">
-              → {{ getCategoryName(formData.categoryId) }}
+            <span v-if="!editingSite && formData.categoryIdentity" class="category-hint">
+              → {{ getCategoryName(formData.categoryIdentity) }}
             </span>
           </h3>
           <button @click="closeModal" class="close-btn">✕</button>
         </div>
 
-        <form @submit.prevent="saveSite" class="site-form">
+        <form @submit.prevent="saveSiteV1" class="site-form">
           <div class="form-row">
             <div class="form-group">
               <label>站点名称 *:</label>
@@ -122,11 +122,11 @@
             </div>
             <div class="form-group">
               <label>所属分类 *:</label>
-              <select v-model="formData.categoryId" required class="form-input">
+              <select v-model="formData.categoryIdentity" required class="form-input">
                 <option value="">请选择分类</option>
-                <option v-for="category in localCategories" :key="category.id" :value="category.id">
-                  {{ category.icon }} {{ category.name }}
-                  <span v-if="category.id === selectedCategoryId">(当前筛选)</span>
+                <option v-for="category in localCategories" :key="category.identity" :value="category.identity">
+                  {{ category.name }}
+                  <span v-if="category.identity === selectedCategoryId">(当前筛选)</span>
                 </option>
               </select>
             </div>
@@ -158,11 +158,11 @@
             <div class="icon-input-group">
               <input
                 v-model="formData.icon"
-                placeholder="图标URL或使用自动获取"
+                placeholder="直接引用URL或将URL同步到本地,如 https://abc.com/favicon.ico"
                 class="form-input"
               >
-              <button type="button" @click="autoDetectIcon" class="auto-icon-btn">
-                🔍 自动获取
+              <button type="button" @click="autoDetectIconV2" class="auto-icon-btn">
+                🔍 同步到本地
               </button>
             </div>
             <div class="icon-preview" v-if="formData.icon">
@@ -172,7 +172,7 @@
 
           <div class="form-actions">
             <button type="button" @click="closeModal" class="cancel-btn">取消</button>
-            <button type="submit" class="submit-btn">
+            <button type="type" class="submit-btn" @click="handleSaveSite">
               {{ editingSite ? '更新' : '添加' }}
             </button>
           </div>
@@ -185,7 +185,10 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useGitHubAPI } from '../../apis/useGitHubAPI.js'
+import { useNavigation } from '../../apis/useNavigation.js'
 import draggable from 'vuedraggable'
+
+const { getNavList, sortSites, deleteSite, syncRemoteAsset, saveSite } = useNavigation()
 
 const props = defineProps({
   categories: {
@@ -230,7 +233,8 @@ const formData = ref({
   url: '',
   description: '',
   icon: '',
-  categoryId: ''
+  categoryIdentity: '',
+  identity: ''
 })
 
 // 监听props变化
@@ -246,8 +250,9 @@ watch(() => props.initialSelectedCategoryId, (newCategoryId) => {
 }, { immediate: true })
 
 // 手动同步到父组件的函数，避免无限循环
-const syncToParent = () => {
-  emit('update', localCategories.value)
+const syncToParent = async () => {
+  const navList = await getNavList()
+  emit('update', navList)
 }
 
 // 计算属性
@@ -258,7 +263,7 @@ const allSites = computed(() => {
       category.sites.forEach(site => {
         sites.push({
           ...site,
-          categoryId: category.id
+          categoryIdentity: category.identity
         })
       })
     }
@@ -272,7 +277,7 @@ const filteredSites = computed(() => {
   if (!selectedCategoryId.value) {
     return allSites.value
   }
-  return allSites.value.filter(site => site.categoryId === selectedCategoryId.value)
+  return allSites.value.filter(site => site.categoryIdentity === selectedCategoryId.value)
 })
 
 // 当前显示的站点（用于拖拽排序）
@@ -304,8 +309,8 @@ const dragOptions = computed(() => {
 
 // 获取分类名称
 const getCategoryName = (categoryId) => {
-  const category = localCategories.value.find(cat => cat.id === categoryId)
-  return category ? `${category.icon} ${category.name}` : '未分类'
+  const category = localCategories.value.find(cat => cat.identity === categoryId)
+  return category ? `${category.name}` : '未分类'
 }
 
 // 获取图标显示URL - 优先使用预览缓存
@@ -313,9 +318,9 @@ const getIconDisplayUrl = (iconPath) => {
   if (!iconPath) return ''
 
   // 如果有预览缓存，使用预览URL
-  if (iconPreviews.value.has(iconPath)) {
-    return iconPreviews.value.get(iconPath)
-  }
+  // if (iconPreviews.value.has(iconPath)) {
+  //   return iconPreviews.value.get(iconPath)
+  // }
 
   // 否则使用原始路径
   return iconPath
@@ -326,23 +331,21 @@ const editSite = (site) => {
   editingSite.value = site
   showAddModal.value = false // 确保添加弹窗关闭
   formData.value = {
+    identity: site.identity,
     name: site.name,
     url: site.url,
     description: site.description,
     icon: site.icon,
-    categoryId: site.categoryId
+    categoryIdentity: site.categoryIdentity
   }
   iconError.value = false
 }
 
 // 删除站点
-const deleteSite = (site) => {
+const handleDeleteSite = async (site) => {
   if (confirm(`确定要删除站点"${site.name}"吗？`)) {
-    const category = localCategories.value.find(cat => cat.id === site.categoryId)
-    if (category && category.sites) {
-      category.sites = category.sites.filter(s => s.id !== site.id)
-      syncToParent()
-    }
+    await deleteSite(site.identity)
+    syncToParent()
   }
 }
 
@@ -355,12 +358,13 @@ const updateSitesOrder = (newSites) => {
   }
 
   // 找到当前分类
-  const category = localCategories.value.find(cat => cat.id === selectedCategoryId.value)
+  const category = localCategories.value.find(cat => cat.identity === selectedCategoryId.value)
   if (!category) return
 
   // 更新该分类的站点顺序
   category.sites = newSites.map(site => ({
-    id: site.id,
+    categoryIdentity: site.categoryIdentity,
+    identity: site.identity,
     name: site.name,
     url: site.url,
     description: site.description,
@@ -371,11 +375,13 @@ const updateSitesOrder = (newSites) => {
 }
 
 // 拖拽结束事件
-const onDragEnd = (event) => {
+const onDragEnd = async (event) => {
   console.log('拖拽排序完成:', event)
+  const categoryIdentity = selectedCategoryId.value
+  const identities = currentPageSites.value.map(site => site.identity)
+  await sortSites(categoryIdentity, identities)
+  syncToParent()
 }
-
-
 
 // 通用图标测试函数
 const testImage = async (imageUrl) => {
@@ -638,6 +644,20 @@ const tryFallbackServices = async (domain) => {
   }
 }
 
+const autoDetectIconV2 = async () => {
+  if (!formData.value.icon) {
+    alert('请先输入站点图标URL')
+    return
+  }
+
+  const url = await syncRemoteAsset('site', formData.value.icon)
+  if (url) {
+    formData.value.icon = url
+  } else {
+    alert('无法获取网站图标')
+  }
+}
+
 // 自动检测图标
 const autoDetectIcon = async () => {
   if (!formData.value.url) {
@@ -654,8 +674,19 @@ const autoDetectIcon = async () => {
   }
 }
 
+const handleSaveSite = async () => {
+  await saveSite({ 
+    categoryIdentity: formData.value.categoryIdentity, 
+    identity: formData.value.identity,
+    name: formData.value.name, 
+    url: formData.value.url, 
+    description: formData.value.description, 
+    icon: formData.value.icon })
+  syncToParent()
+}
+
 // 保存站点
-const saveSite = () => {
+const saveSiteV1 = () => {
   const category = localCategories.value.find(cat => cat.id === formData.value.categoryId)
   if (!category) {
     alert('请选择有效的分类')
@@ -714,13 +745,14 @@ const saveSite = () => {
 const openAddModal = () => {
   showAddModal.value = true
   // 设置默认分类为当前选中的分类，如果没有选中则使用第一个分类
-  const defaultCategoryId = selectedCategoryId.value || (localCategories.value[0]?.id || '')
+  const defaultCategoryIdentity = selectedCategoryId.value || (localCategories.value[0]?.identity || '')
   formData.value = {
     name: '',
     url: '',
     description: '',
     icon: '',
-    categoryId: defaultCategoryId
+    categoryIdentity: defaultCategoryIdentity,
+    identity: '',
   }
   iconError.value = false
 }

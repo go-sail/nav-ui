@@ -6,12 +6,23 @@
         <h1>🔐 管理员登录</h1>
         <form @submit.prevent="handleLogin">
           <div class="form-group">
-            <label for="password">管理密钥:</label>
+            <label for="username">用户名:</label>
+            <input
+              id="username"
+              type="text"
+              v-model="username"
+              placeholder="请输入用户名"
+              required
+              class="form-input"
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">密码:</label>
             <input
               id="password"
               type="password"
-              v-model="loginPassword"
-              placeholder="请输入管理密钥"
+              v-model="password"
+              placeholder="请输入密码"
               required
               class="form-input"
             />
@@ -72,7 +83,7 @@
             :class="{ active: activeTab === 'settings' }"
             @click="activeTab = 'settings'"
           >
-            ⚙️ 系统设置
+            ⚙️ 系统信息
           </button>
         </div>
 
@@ -126,13 +137,19 @@ import SiteManager from '../components/admin/SiteManager.vue'
 import SystemSettings from '../components/admin/SystemSettings.vue'
 import CustomDialog from '../components/admin/CustomDialog.vue'
 import { useGitHubAPI } from '../apis/useGitHubAPI.js'
+import { useNavigation } from '../apis/useNavigation.js'
 
 const router = useRouter()
 const { saveCategoriesToGitHub, loadCategoriesFromGitHub } = useGitHubAPI()
+const { 
+  userLogin, userLogout, getNavList, getCategories, 
+  getSites, saveCategory, saveSite, deleteCategory, 
+  deleteSite, sortCategories, sortSites } = useNavigation()
 
 // 认证状态
 const isAuthenticated = ref(false)
-const loginPassword = ref('')
+const username = ref('')
+const password = ref('')
 const loginError = ref('')
 const loading = ref(false)
 const saving = ref(false)
@@ -140,7 +157,7 @@ const saving = ref(false)
 // 管理界面状态
 const activeTab = ref('categories')
 const categories = ref([])
-const navTitle = ref('猫猫导航') // 保存网站标题
+const navTitle = ref('Go-Sail导航站') // 保存网站标题
 const selectedCategoryId = ref('') // 用于站点管理的选中分类
 
 // 紧急兜底：如果5秒后loading还是true，强制重置
@@ -176,14 +193,10 @@ const handleLogin = async () => {
   loginError.value = ''
 
   try {
-    const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD
-    if (!adminPassword) {
-      throw new Error('管理密钥未配置，请配置环境变量')
-    }
+    const token = await userLogin(username.value, password.value)
 
-    if (loginPassword.value === adminPassword) {
+    if (token) {
       isAuthenticated.value = true
-      localStorage.setItem('admin_authenticated', 'true')
 
       // 登录成功后，不立即加载数据，让用户进入管理界面
       console.log('登录成功，准备进入管理界面')
@@ -198,7 +211,7 @@ const handleLogin = async () => {
         }
       }, 500)
     } else {
-      throw new Error('密钥错误，请重新输入')
+      throw new Error('用户名或密码错误，请重新输入')
     }
   } catch (error) {
     loginError.value = error.message
@@ -211,11 +224,12 @@ const handleLogin = async () => {
 }
 
 // 退出登录
-const logout = () => {
+const logout = async () => {
+  await userLogout()
   isAuthenticated.value = false
   localStorage.removeItem('admin_authenticated')
   loginPassword.value = ''
-  router.push('/')
+  location.reload()
 }
 
 // 调试加载数据
@@ -259,13 +273,13 @@ const loadCategories = async () => {
     // 直接加载本地数据，避免GitHub API调用
     const { mockData } = await import('../mock/mock_data.js')
     categories.value = mockData.categories || []
-    navTitle.value = mockData.title || '猫猫导航'
+    navTitle.value = mockData.title || 'Go-Sail导航站'
     console.log('✅ 本地数据加载成功，分类数量:', categories.value.length)
   } catch (error) {
     console.error('❌ 本地数据加载失败:', error)
     // 最后兜底：使用空数组
     categories.value = []
-    navTitle.value = '猫猫导航'
+    navTitle.value = 'Go-Sail导航站'
   } finally {
     // 确保loading状态被重置
     loading.value = false
@@ -313,7 +327,7 @@ const skipLoading = async () => {
   try {
     const { mockData } = await import('../mock/mock_data.js')
     categories.value = mockData.categories || []
-    navTitle.value = mockData.title || '猫猫导航'
+    navTitle.value = mockData.title || 'Go-Sail导航站'
     console.log('跳过加载后，使用本地数据:', categories.value.length)
   } catch (error) {
     console.error('跳过加载时，本地数据加载失败:', error)
@@ -327,7 +341,7 @@ const skipLoading = async () => {
         sites: []
       }
     ]
-    navTitle.value = '猫猫导航'
+    navTitle.value = 'Go-Sail导航站'
   }
 
   showDialog(
@@ -395,7 +409,7 @@ const emergencyReset = () => {
 }
 
 // 组件挂载时检查认证状态
-onMounted(() => {
+onMounted(async () => {
   console.log('🔍 AdminView组件开始挂载')
 
   // 立即强制重置loading状态，避免卡死
@@ -408,22 +422,9 @@ onMounted(() => {
 
     // 直接使用本地数据，不调用GitHub API
     console.log('🔍 直接加载本地数据，跳过GitHub API调用')
-    try {
-      // 使用同步方式加载本地数据
-      import('../mock/mock_data.js').then(({ mockData }) => {
-        categories.value = mockData.categories || []
-        navTitle.value = mockData.title || '猫猫导航'
-        console.log('🔍 本地数据加载成功，分类数量:', categories.value.length)
-      }).catch(error => {
-        console.error('🔍 本地数据加载失败:', error)
-        categories.value = []
-        navTitle.value = '猫猫导航'
-      })
-    } catch (error) {
-      console.error('🔍 数据加载异常:', error)
-      categories.value = []
-      navTitle.value = '猫猫导航'
-    }
+    const navList = await getNavList()
+    categories.value = navList || []
+    navTitle.value = navList.title || 'Go-Sail导航站'
   }
 
   console.log('🔍 AdminView组件挂载完成')
